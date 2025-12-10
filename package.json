@@ -1,0 +1,34 @@
+{
+  "name": "desktop-window-manager",
+  "version": "1.0.0",
+  "description": "Native desktop window management for Node.js - Windows and Linux support",
+  "main": "index.js",
+  "scripts": {
+    "install": "cmake-js compile",
+    "build": "cmake-js compile",
+    "rebuild": "cmake-js rebuild",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "window",
+    "desktop",
+    "native",
+    "focus",
+    "automation"
+  ],
+  "author": "Scott",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "win32",
+    "linux"
+  ],
+  "dependencies": {
+    "node-addon-api": "^8.0.0"
+  },
+  "devDependencies": {
+    "cmake-js": "^7.3.0"
+  }
+}

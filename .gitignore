@@ -1,0 +1,25 @@
+# Build outputs
+build/
+*.node
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Logs
+*.log
+*.tlog
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.o
+*.obj
+*~
