@@ -280,6 +280,153 @@ Napi::Value ResizeWindow(const Napi::CallbackInfo& info) {
     return Napi::Boolean::New(env, result != 0);
 }
 
+// Capture the primary desktop screenshot
+Napi::Value CaptureDesktop(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    // Primary monitor dimensions
+    int width = GetSystemMetrics(SM_CXSCREEN);
+    int height = GetSystemMetrics(SM_CYSCREEN);
+
+    HDC hdcScreen = GetDC(NULL);
+    if (!hdcScreen) {
+        Napi::Error::New(env, "Failed to get screen DC").ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    HDC hdcMem = CreateCompatibleDC(hdcScreen);
+    HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, width, height);
+    HGDIOBJ hOld = SelectObject(hdcMem, hBitmap);
+
+    BitBlt(hdcMem, 0, 0, width, height, hdcScreen, 0, 0, SRCCOPY);
+
+    BITMAPINFOHEADER bi = {};
+    bi.biSize = sizeof(BITMAPINFOHEADER);
+    bi.biWidth = width;
+    bi.biHeight = -height;  // negative = top-down row order
+    bi.biPlanes = 1;
+    bi.biBitCount = 32;
+    bi.biCompression = BI_RGB;
+
+    size_t dataSize = (size_t)width * height * 4;
+    auto buffer = Napi::Buffer<uint8_t>::New(env, dataSize);
+
+    GetDIBits(hdcMem, hBitmap, 0, height, buffer.Data(),
+              (BITMAPINFO*)&bi, DIB_RGB_COLORS);
+
+    // Convert BGRA -> RGBA in place
+    uint8_t* data = buffer.Data();
+    for (size_t i = 0; i < dataSize; i += 4) {
+        uint8_t tmp = data[i];      // B
+        data[i]     = data[i + 2];  // R -> slot 0
+        data[i + 2] = tmp;          // B -> slot 2
+        data[i + 3] = 255;          // A = opaque
+    }
+
+    // Cleanup GDI resources
+    SelectObject(hdcMem, hOld);
+    DeleteObject(hBitmap);
+    DeleteDC(hdcMem);
+    ReleaseDC(NULL, hdcScreen);
+
+    Napi::Object result = Napi::Object::New(env);
+    result.Set("data", buffer);
+    result.Set("width", Napi::Number::New(env, width));
+    result.Set("height", Napi::Number::New(env, height));
+
+    return result;
+}
+
+// Capture a specific window by handle
+Napi::Value CaptureWindow(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+        Napi::TypeError::New(env, "Expected 1 argument: handle")
+            .ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    int64_t handleValue = info[0].As<Napi::Number>().Int64Value();
+    HWND hwnd = reinterpret_cast<HWND>(handleValue);
+
+    if (!IsWindow(hwnd)) {
+        Napi::Error::New(env, "Invalid window handle")
+            .ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    RECT rect;
+    if (!GetWindowRect(hwnd, &rect)) {
+        Napi::Error::New(env, "Failed to get window rect")
+            .ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    int width  = rect.right - rect.left;
+    int height = rect.bottom - rect.top;
+
+    if (width <= 0 || height <= 0) {
+        Napi::Error::New(env, "Window has invalid dimensions")
+            .ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    HDC hdcWindow = GetWindowDC(hwnd);
+    if (!hdcWindow) {
+        Napi::Error::New(env, "Failed to get window DC")
+            .ThrowAsJavaScriptException();
+        return env.Null();
+    }
+
+    HDC hdcMem = CreateCompatibleDC(hdcWindow);
+    HBITMAP hBitmap = CreateCompatibleBitmap(hdcWindow, width, height);
+    HGDIOBJ hOld = SelectObject(hdcMem, hBitmap);
+
+    // PrintWindow can capture even partially-occluded windows;
+    // PW_RENDERFULLCONTENT (0x2) handles DWM/DirectX content (Win 8.1+)
+    BOOL captured = PrintWindow(hwnd, hdcMem, PW_RENDERFULLCONTENT);
+    if (!captured) {
+        // Fallback to BitBlt (only captures visible portion)
+        BitBlt(hdcMem, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
+    }
+
+    BITMAPINFOHEADER bi = {};
+    bi.biSize = sizeof(BITMAPINFOHEADER);
+    bi.biWidth = width;
+    bi.biHeight = -height;
+    bi.biPlanes = 1;
+    bi.biBitCount = 32;
+    bi.biCompression = BI_RGB;
+
+    size_t dataSize = (size_t)width * height * 4;
+    auto buffer = Napi::Buffer<uint8_t>::New(env, dataSize);
+
+    GetDIBits(hdcMem, hBitmap, 0, height, buffer.Data(),
+              (BITMAPINFO*)&bi, DIB_RGB_COLORS);
+
+    // BGRA -> RGBA
+    uint8_t* data = buffer.Data();
+    for (size_t i = 0; i < dataSize; i += 4) {
+        uint8_t tmp = data[i];
+        data[i]     = data[i + 2];
+        data[i + 2] = tmp;
+        data[i + 3] = 255;
+    }
+
+    SelectObject(hdcMem, hOld);
+    DeleteObject(hBitmap);
+    DeleteDC(hdcMem);
+    ReleaseDC(hwnd, hdcWindow);
+
+    Napi::Object result = Napi::Object::New(env);
+    result.Set("data", buffer);
+    result.Set("width", Napi::Number::New(env, width));
+    result.Set("height", Napi::Number::New(env, height));
+
+    return result;
+}
+
 // Initialize the addon
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports["getWindows"] = Napi::Function::New(env, GetWindows);
@@ -288,7 +435,8 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports["getActiveWindow"] = Napi::Function::New(env, GetActiveWindowInfo);
     exports["moveWindow"] = Napi::Function::New(env, MoveWindowEx);
     exports["resizeWindow"] = Napi::Function::New(env, ResizeWindow);
-
+    exports["captureDesktop"] = Napi::Function::New(env, CaptureDesktop);
+    exports["captureWindow"] = Napi::Function::New(env, CaptureWindow);
     return exports;
 }
 

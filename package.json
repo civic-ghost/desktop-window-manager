@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "Native desktop window management for Node.js - Windows and Linux support",
   "main": "index.js",
+  "files": [
+    "index.js",
+    "prebuilds"
+  ],
   "scripts": {
     "install": "cmake-js compile",
     "build": "cmake-js compile",
@@ -26,7 +30,8 @@
     "linux"
   ],
   "dependencies": {
-    "node-addon-api": "^8.0.0"
+    "node-addon-api": "^8.0.0",
+    "jpeg-js": "^0.4.4"
   },
   "devDependencies": {
     "cmake-js": "^7.3.0"

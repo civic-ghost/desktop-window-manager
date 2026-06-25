@@ -1,5 +1,6 @@
 const path = require('path');
 const os = require('os');
+const jpeg = require('jpeg-js');
 
 // Determine platform-specific path
 function getPrebuildPath() {
@@ -88,11 +89,44 @@ function resizeWindow(handle, x, y) {
     return addon.resizeWindow(handle, x, y);
 }
 
+/**
+ * Capture the primary desktop as a JPEG buffer
+ * @param {number} [quality=80] - JPEG quality 1-100
+ * @returns {Buffer} JPEG image data
+ */
+function captureDesktop(quality = 80) {
+    const raw = addon.captureDesktop();
+    const jpegData = jpeg.encode({
+        data: raw.data,
+        width: raw.width,
+        height: raw.height
+    }, quality);
+    return jpegData.data;
+}
+
+/**
+ * Capture a specific window as a JPEG buffer
+ * @param {number} handle - Window handle from getWindows() or getActiveWindow()
+ * @param {number} [quality=80] - JPEG quality 1-100
+ * @returns {Buffer} JPEG image data
+ */
+function captureWindow(handle, quality = 80) {
+    const raw = addon.captureWindow(handle);
+    const jpegData = jpeg.encode({
+        data: raw.data,
+        width: raw.width,
+        height: raw.height
+    }, quality);
+    return jpegData.data;
+}
+
 module.exports = {
     getWindows,
     focusWindow,
     focusWindowByHandle,
     getActiveWindow,
     moveWindow,
-    resizeWindow
+    resizeWindow,
+    captureDesktop,
+    captureWindow
 };

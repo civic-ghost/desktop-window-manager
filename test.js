@@ -1,4 +1,6 @@
 const windowManager = require('./index');
+const fs = require('fs');
+const path = require('path');
 
 console.log('Desktop Window Manager Test\n');
 
@@ -64,6 +66,28 @@ console.log(`Attempting to focus window matching regex "${regexPattern}"...`);
 try {
     const success = windowManager.focusWindow(regexPattern, true);
     console.log(success ? 'Successfully focused window!' : 'Window not found');
+} catch (error) {
+    console.error('Error:', error.message);
+}
+
+console.log('\n=== Test 5: Capture Desktop ===');
+try {
+    const jpegBuffer = windowManager.captureDesktop(80);
+    const outPath = path.join(__dirname, 'test_desktop.jpg');
+    fs.writeFileSync(outPath, jpegBuffer);
+    console.log(`Desktop captured: ${jpegBuffer.length} bytes -> ${outPath}`);
+} catch (error) {
+    console.error('Error:', error.message);
+}
+
+console.log('\n=== Test 6: Capture Active Window ===');
+try {
+    if (activeWindow) {
+        const jpegBuffer = windowManager.captureWindow(activeWindow.handle, 90);
+        const outPath = path.join(__dirname, 'test_window.jpg');
+        fs.writeFileSync(outPath, jpegBuffer);
+        console.log(`Window captured: ${jpegBuffer.length} bytes -> ${outPath}`);
+    }
 } catch (error) {
     console.error('Error:', error.message);
 }
