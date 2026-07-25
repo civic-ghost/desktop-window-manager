@@ -671,8 +671,8 @@ Napi::Value WakeDesktop(const Napi::CallbackInfo& info) {
 static void NormalizeToVirtualDesk(int x, int y, LONG* outDx, LONG* outDy) {
     int vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
     int vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
-    int vw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-    int vh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    int vw = GetSystemMetrics(SM_CXVIRTUALSCREEN) - 1;
+    int vh = GetSystemMetrics(SM_CYVIRTUALSCREEN) - 1;
 
     *outDx = MulDiv(x - vx, 65535, vw > 0 ? vw : 1);
     *outDy = MulDiv(y - vy, 65535, vh > 0 ? vh : 1);

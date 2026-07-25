@@ -36,10 +36,6 @@ async function main() {
 
     await reportMove('linearPath (default provider) -> (350, 250)', { x: 350, y: 250 });
     await reportMove('bezierPath (custom provider) -> (700, 500)', { x: 700, y: 500 }, { provider: bezierPath });
-
-    console.log('Compare these deltas against the RDP/Enhanced Session run:');
-    console.log('  RDP session:   (350,250) -> (358,258)  delta (+8,+8)');
-    console.log('                 (700,500) -> (699,499)  delta (-1,-1)');
 }
 
 main().catch(err => {
