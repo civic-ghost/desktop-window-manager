@@ -1,13 +1,6 @@
 @echo off
 REM Build script for Windows using cmake-js
 
-echo Installing Node.js dependencies...
-call npm install
-if errorlevel 1 (
-    echo Failed to install dependencies
-    exit /b 1
-)
-
 echo.
 echo Building with cmake-js...
 call npx cmake-js compile

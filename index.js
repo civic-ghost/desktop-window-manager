@@ -33,8 +33,20 @@ try {
 }
 
 /**
- * Get all visible windows on the desktop
- * @returns {Array<{handle: number, title: string}>} Array of window objects
+ * Get all visible top-level windows.
+ *
+ * Tool windows (WS_EX_TOOLWINDOW) are excluded; windows with no title are
+ * included and can be identified by `className` (e.g. shell dialogs like
+ * Windows Update prompts).
+ *
+ * @returns {Array<{
+ *   handle: number,
+ *   pid: number,
+ *   className: string,
+ *   title: string,
+ *   position: {x: number, y: number},
+ *   size: {width: number, height: number}
+ * }>} Array of window objects
  */
 function getWindows() {
     return addon.getWindows();
@@ -60,11 +72,39 @@ function focusWindowByHandle(handle) {
 }
 
 /**
- * Get the currently active/focused window
- * @returns {{handle: number, title: string, position: {x, y}, size: {width, height} } | null} Active window or null
+ * Get the currently active/focused window.
+ *
+ * @returns {{
+ *   handle: number,
+ *   pid: number,
+ *   className: string,
+ *   title: string,
+ *   position: {x: number, y: number},
+ *   size: {width: number, height: number}
+ * } | null} Active window, or null if there is no foreground window
  */
 function getActiveWindow() {
     return addon.getActiveWindow();
+}
+
+/**
+ * Ask a window to close.
+ *
+ * Fire-and-forget: posts WM_CLOSE to the target's message queue and returns
+ * immediately. The return value indicates whether the post succeeded — NOT
+ * whether the window actually closed. The target application processes
+ * WM_CLOSE normally and may prompt (unsaved changes), delay, or refuse.
+ * Callers that need to verify closure should follow up with getWindows().
+ *
+ * Uses PostMessage (not SendMessage) so a stuck target message loop cannot
+ * hang the caller.
+ *
+ * @param {number} handle - Window handle from getWindows() or getActiveWindow()
+ * @returns {boolean} True if the WM_CLOSE message was successfully posted,
+ *                    false on failure to post (invalid handle, permission denied)
+ */
+function closeWindow(handle) {
+    return addon.closeWindow(handle);
 }
 
 /**
@@ -85,8 +125,8 @@ function moveWindow(handle, x, y) {
  * @param {number} height - The new window height
  * @returns {boolean} True if window was resized, false otherwise
  */
-function resizeWindow(handle, x, y) {
-    return addon.resizeWindow(handle, x, y);
+function resizeWindow(handle, width, height) {
+    return addon.resizeWindow(handle, width, height);
 }
 
 /**
@@ -120,13 +160,27 @@ function captureWindow(handle, quality = 80) {
     return jpegData.data;
 }
 
+/**
+ * Wake the desktop / display pipeline with a synthetic no-op mouse move
+ * (net cursor displacement is zero) plus a one-shot display-required
+ * assertion. Use before operations that require a responsive desktop
+ * compositor — e.g. launching a headed browser on an unattended VM whose
+ * display pipeline has gone dormant.
+ * @returns {boolean} True if the input events were injected successfully
+ */
+function wakeDesktop() {
+    return addon.wakeDesktop();
+}
+
 module.exports = {
     getWindows,
     focusWindow,
     focusWindowByHandle,
     getActiveWindow,
+    closeWindow,
     moveWindow,
     resizeWindow,
     captureDesktop,
-    captureWindow
+    captureWindow,
+    wakeDesktop
 };
