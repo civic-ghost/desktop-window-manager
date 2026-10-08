@@ -401,6 +401,30 @@ section("captureScreen('all') — virtual desktop", () => {
         `virtual >= primary (${all.width}x${all.height} >= ${primary.width}x${primary.height})`);
 });
 
+section('getScreenSize() shape', () => {
+    const size = addon.getScreenSize();
+    assert(size !== null && typeof size === 'object', 'returns an object');
+    assert(typeof size.x      === 'number', `x is a number (${size.x})`);
+    assert(typeof size.y      === 'number', `y is a number (${size.y})`);
+    assert(typeof size.width  === 'number' && size.width  > 0, `width > 0 (${size.width})`);
+    assert(typeof size.height === 'number' && size.height > 0, `height > 0 (${size.height})`);
+    console.log(`  virtual screen: origin (${size.x}, ${size.y}), size ${size.width}x${size.height}`);
+    if (size.x !== 0 || size.y !== 0) {
+        console.log('  (non-zero origin — likely a multi-monitor layout with a monitor');
+        console.log('   mounted above or to the left of the primary)');
+    }
+});
+
+section("getScreenSize() matches captureScreen('all') dimensions", () => {
+    // Both read the same underlying GetSystemMetrics values (via the shared
+    // GetVirtualScreenRect helper as of the housekeeping pass), so their
+    // width/height should always agree.
+    const size = addon.getScreenSize();
+    const all  = addon.captureScreen('all');
+    assert(size.width === all.width && size.height === all.height,
+        `${size.width}x${size.height} === ${all.width}x${all.height}`);
+});
+
 section('captureScreen invalid targets rejected', () => {
     let threw = false;
     try { addon.captureScreen('nonsense'); } catch (e) { threw = true; }

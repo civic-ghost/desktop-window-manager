@@ -64,26 +64,25 @@ Both contracts follow the same pattern: a pure function produces a data structur
 ## Quick start
 
 ```js
-const screen   = require('./lib/screen');
-const mouse    = require('./lib/mouse');
-const keyboard = require('./lib/keyboard');
-const clipboard = require('./lib/clipboard');
+const { focusWindowByPid, moveTo,
+        click, typeText,
+        paste, captureScreen } require('desktop-window-manager');
 
 // Find and focus a window by process ID
-screen.focusWindowByPid(12345);
+focusWindowByPid(12345);
 
 // Move the cursor and click
-await mouse.moveTo({ x: 500, y: 300 });
-await mouse.click();
+await moveTo({ x: 500, y: 300 });
+await click();
 
 // Type some text with a per-character delay
-await keyboard.typeText('Hello, world!', { charDelay: 50 });
+await typeText('Hello, world!', { charDelay: 50 });
 
 // Paste via the clipboard (faster than typing for long strings)
-await clipboard.paste('A very long string...', { verify: true });
+await paste('A very long string...', { verify: true });
 
 // Capture the primary monitor as a JPEG buffer
-const screenshot = screen.captureScreen('primary', 80);
+const screenshot = captureScreen('primary', 80);
 require('fs').writeFileSync('screenshot.jpg', screenshot);
 ```
 
@@ -118,6 +117,9 @@ require('fs').writeFileSync('screenshot.jpg', screenshot);
 
 - **`getCursorPosition()`** → `{x, y}`
   Current cursor position in absolute physical pixels.
+
+  **`getScreenSize()`** → `{x, y, width, height}`
+  Returns the virtual monitor origin and dimensions. 
 
 #### Window manipulation
 

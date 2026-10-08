@@ -230,15 +230,14 @@ Napi::Value FocusWindowByHandle(const Napi::CallbackInfo& info) {
     int64_t handleValue = info[0].As<Napi::Number>().Int64Value();
     HWND hwnd = reinterpret_cast<HWND>(handleValue);
 
-    if (!IsWindow(hwnd)) {
-        return Napi::Boolean::New(env, false);
-    }
+    if (!IsWindow(hwnd)) { return Napi::Boolean::New(env, false); }
 
     if (IsIconic(hwnd)) {
         ShowWindow(hwnd, SW_RESTORE);
     }
-    SetForegroundWindow(hwnd);
-    SetFocus(hwnd);
+
+    if( !SetForegroundWindow(hwnd) ){ return Napi::Boolean::New(env, false); }
+    if( SetFocus(hwnd) != NULL ){ return Napi::Boolean::New(env, false); }
 
     return Napi::Boolean::New(env, true);
 }
@@ -360,6 +359,27 @@ Napi::Value ResizeWindow(const Napi::CallbackInfo& info) {
 // Every GDI resource acquired along the way is released before the throw
 // so we don't leak GDI handles when a capture aborts.
 // -----------------------------------------------------------------------------
+
+// Virtual desktop bounding box, shared by getScreenSize, captureScreen('all'),
+// and mouse cursor normalization. On a single-monitor system this is just
+// the primary monitor at origin (0, 0). On multi-monitor systems the origin
+// can be negative — e.g. (-1920, 0) when a second monitor is mounted to the
+// left of the primary — so callers must not assume (0, 0).
+struct VirtualScreenRect {
+    int x;
+    int y;
+    int width;
+    int height;
+};
+
+static VirtualScreenRect GetVirtualScreenRect() {
+    VirtualScreenRect r;
+    r.x      = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    r.y      = GetSystemMetrics(SM_YVIRTUALSCREEN);
+    r.width  = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    r.height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    return r;
+}
 
 static BOOL CALLBACK EnumMonitorsProc(HMONITOR, HDC, LPRECT lprcMonitor, LPARAM dwData) {
     auto* monitors = reinterpret_cast<std::vector<RECT>*>(dwData);
@@ -487,11 +507,8 @@ Napi::Value CaptureScreen(const Napi::CallbackInfo& info) {
             return CaptureRegion(env, 0, 0, w, h);
         }
         if (target == "all") {
-            int x = GetSystemMetrics(SM_XVIRTUALSCREEN);
-            int y = GetSystemMetrics(SM_YVIRTUALSCREEN);
-            int w = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-            int h = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-            return CaptureRegion(env, x, y, w, h);
+            VirtualScreenRect vr = GetVirtualScreenRect();
+            return CaptureRegion(env, vr.x, vr.y, vr.width, vr.height);
         }
         Napi::TypeError::New(env,
             "Invalid target string: expected 'primary' or 'all'")
@@ -642,6 +659,25 @@ Napi::Value CaptureWindow(const Napi::CallbackInfo& info) {
     return result;
 }
 
+// getScreenSize() — virtual desktop bounds, for caller-side bounds checking
+// (e.g. clamping cursor targets before calling setCursorPosition/moveTo).
+// Returns { x, y, width, height }. x/y are the origin of the virtual desktop
+// relative to the primary monitor's top-left corner and can be negative on
+// multi-monitor systems where a monitor is mounted above or to the left of
+// the primary.
+Napi::Value GetScreenSize(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    VirtualScreenRect vr = GetVirtualScreenRect();
+
+    Napi::Object result = Napi::Object::New(env);
+    result.Set("x",      Napi::Number::New(env, vr.x));
+    result.Set("y",      Napi::Number::New(env, vr.y));
+    result.Set("width",  Napi::Number::New(env, vr.width));
+    result.Set("height", Napi::Number::New(env, vr.height));
+    return result;
+}
+
 Napi::Value WakeDesktop(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
 
@@ -669,13 +705,10 @@ Napi::Value WakeDesktop(const Napi::CallbackInfo& info) {
 // -----------------------------------------------------------------------------
 
 static void NormalizeToVirtualDesk(int x, int y, LONG* outDx, LONG* outDy) {
-    int vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
-    int vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
-    int vw = GetSystemMetrics(SM_CXVIRTUALSCREEN) - 1;
-    int vh = GetSystemMetrics(SM_CYVIRTUALSCREEN) - 1;
+    VirtualScreenRect vr = GetVirtualScreenRect();
 
-    *outDx = MulDiv(x - vx, 65535, vw > 0 ? vw : 1);
-    *outDy = MulDiv(y - vy, 65535, vh > 0 ? vh : 1);
+    *outDx = MulDiv(x - vr.x, 65535, vr.width  > 0 ? vr.width  : 1);
+    *outDy = MulDiv(y - vr.y, 65535, vr.height > 0 ? vr.height : 1);
 }
 
 Napi::Value SetCursorPosition(const Napi::CallbackInfo& info) {
@@ -1097,6 +1130,7 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports["captureDesktop"]      = Napi::Function::New(env, CaptureDesktop);
     exports["captureScreen"]       = Napi::Function::New(env, CaptureScreen);
     exports["captureWindow"]       = Napi::Function::New(env, CaptureWindow);
+    exports["getScreenSize"]       = Napi::Function::New(env, GetScreenSize);
     exports["wakeDesktop"]         = Napi::Function::New(env, WakeDesktop);
 
     // Mouse primitives
